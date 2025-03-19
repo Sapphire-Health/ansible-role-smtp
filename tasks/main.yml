@@ -1,0 +1,60 @@
+---
+- name: Install SMTP Server on Windows
+  ansible.windows.win_feature:
+    name: SMTP-Server
+    state: present
+    include_management_tools: true
+
+- name: Ensure SMTP and IIS Services Are Stopped Before Editing MetaBase.xml
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - SMTPSVC
+    - IISADMIN
+
+- name: Update SMTP Smart Host in MetaBase.xml
+  ansible.windows.win_shell: |
+    $xmlPath = "C:\Windows\System32\inetsrv\MetaBase.xml"
+    [xml]$xml = Get-Content $xmlPath
+    $smtpNode = $xml.SelectSingleNode("//IIsSmtpServer[@Location='/LM/SmtpSvc/1']")
+    if ($smtpNode) {
+        $smtpNode.SetAttribute("SmartHost", "{{ smtp_smart_host }}")
+        $xml.Save($xmlPath)
+    }
+
+- name: Allow Specific IPs to Relay Emails in MetaBase.xml
+  ansible.windows.win_shell: |
+    $xmlPath = "C:\Windows\System32\inetsrv\MetaBase.xml"
+    [xml]$xml = Get-Content $xmlPath
+    $smtpNode = $xml.SelectSingleNode("//IIsSmtpServer[@Location='/LM/SmtpSvc/1']")
+    if ($smtpNode) {
+        $relayIPs = "{{ smtp_allowed_ips | join(';') }}"
+        if ($smtpNode.HasAttribute("RelayIpList")) {
+            $smtpNode.SetAttribute("RelayIpList", $relayIPs)
+        } else {
+            $newAttr = $xml.CreateAttribute("RelayIpList")
+            $newAttr.Value = $relayIPs
+            $smtpNode.Attributes.Append($newAttr) | Out-Null
+        }
+        $xml.Save($xmlPath)
+    }
+
+- name: Enable SMTP Logging in MetaBase.xml
+  ansible.windows.win_shell: |
+    $xmlPath = "C:\Windows\System32\inetsrv\MetaBase.xml"
+    [xml]$xml = Get-Content $xmlPath
+    $logNode = $xml.SelectSingleNode("//IIsSmtpServer[@Location='/LM/SmtpSvc/1']")
+    if ($logNode) {
+        $logNode.SetAttribute("LogType", "1")
+        $logNode.SetAttribute("LogFileDirectory", "{{ smtp_log_path }}")
+        $xml.Save($xmlPath)
+    }
+
+- name: Restart IIS and SMTP Services After Editing MetaBase.xml
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: started
+  loop:
+    - IISADMIN
+    - SMTPSVC

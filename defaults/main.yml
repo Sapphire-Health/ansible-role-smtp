@@ -1,0 +1,4 @@
+smtp_smart_host: "ses.aws.com"
+smtp_allowed_ips:
+  - "10.248.13.5"
+smtp_log_path: "C:\\inetpub\\logs\\SMTPSVC1"

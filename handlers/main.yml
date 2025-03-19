@@ -1,0 +1,5 @@
+---
+- name: Restart SMTP Service
+  ansible.windows.win_service:
+    name: SMTPSVC
+    state: restarted
